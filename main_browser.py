@@ -154,10 +154,19 @@ def transform_medex_item(scraped_data):
 
 
 def get_chrome_path():
-    """Attempts to find the Chrome executable on macOS."""
+    """Attempts to find the Chrome executable on macOS and Windows."""
     paths = [
+        # macOS
         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
         "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        # Windows
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files\Chromium\Application\chrome.exe",
+        # Linux (just in case)
+        "/usr/bin/google-chrome",
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser"
     ]
     for path in paths:
         if os.path.exists(path):
