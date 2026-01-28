@@ -24,7 +24,7 @@ Edit `config.py` to set:
 Run the scraper:
 
 ```bash
-python main.py
+python mani_browser.py
 ```
 
 ## Output
