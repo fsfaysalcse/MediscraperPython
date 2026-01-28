@@ -209,6 +209,8 @@ class MedexBrowserScraper:
         co.set_argument('--disable-gpu')
         co.set_argument('--no-first-run')
         co.set_argument('--no-default-browser-check')
+        # Stealth: Hide automation features
+        co.set_argument('--disable-blink-features=AutomationControlled')
         
         if config.HEADLESS_MODE:
             logger.info("Running in Headless Mode")
@@ -266,47 +268,51 @@ class MedexBrowserScraper:
         except: pass
 
     def handle_security_check(self):
-        """Checks for 'Security Check' and attempts to click Continue."""
-        retries = 0
-        max_retries = 3
-        
-        while retries < max_retries:
-            try:
-                if not self.page: return False
-                
-                title = self.page.title.lower()
-                text = self.page.html.lower()
-                is_captcha = "security check" in title or "captcha-button" in text
-                
-                if not is_captcha:
-                    return True # Passed
-                
-                logger.warning(f"Security Check Page Detected! (Attempt {retries+1})")
-                
-                # Human-like delay before reacting
-                time.sleep(random.uniform(1.5, 3.0))
-                
-                # Try to click the button
-                btn = self.page.ele('.captcha-button')
-                if btn:
-                    logger.info("Found Captcha Button. Clicking...")
-                    btn.click()
-                    time.sleep(3) # Wait for reload
-                    
-                    # Check if we passed
-                    if "security check" not in self.page.title.lower():
-                        logger.info("Captcha passed!")
+        """
+        Checks for 'Security Check' page. 
+        If detected, PAUSES and waits for MANUAL user intervention.
+        Returns True if check passed (eventually), False if skipped/failed.
+        """
+        try:
+            if not self.page: return False
+            
+            # Check if we are on a security page
+            title = self.page.title.lower()
+            text = self.page.html.lower()
+            is_captcha = "security check" in title or "captcha-button" in text
+            
+            if not is_captcha:
+                return True # All good
+            
+            # --- MANUAL INTERVENTION MODE ---
+            logger.warning("!!! SECURITY CHECK DETECTED !!!")
+            logger.warning(">>> PLEASE SOLVE THE CAPTCHA MANUALLY IN THE BROWSER <<<")
+            logger.warning("The script is PAUSED and waiting for you...")
+            
+            # Play a beep/sound if possible (terminal bell)
+            print('\a') 
+            
+            # Wait loop
+            while True:
+                time.sleep(2)
+                try:
+                    curr_title = self.page.title.lower()
+                    if "security check" not in curr_title and "just a moment" not in curr_title:
+                        logger.info("Security Check passed! Resuming...")
+                        time.sleep(2) # Give it a sec to settle
                         return True
-                else:
-                    logger.warning("Captcha button not found on security page.")
-                
-                time.sleep(3)
-                retries += 1
-            except Exception as e:
-                logger.error(f"Error in captcha handler: {e}")
-                time.sleep(1)
-        
-        return False # Failed
+                    else:
+                        # Still stuck
+                        pass
+                except:
+                    # Page might be navigating
+                    pass
+                    
+        except Exception as e:
+            logger.error(f"Error in security check handler: {e}")
+            return False
+            
+        return True
 
     def scrape_details(self, url):
         self.page.get(url)
@@ -512,7 +518,8 @@ def main_loop():
         suffix_input = ""
         
     if not suffix_input:
-        suffix = "All"
+        suffix = config.DEFAULT_SUFFIX
+        logger.info(f"Using Default Suffix: {suffix}")
     else:
         suffix = re.sub(r'[^\w\s-]', '', suffix_input).strip().replace(' ', '_')
         

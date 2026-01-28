@@ -1,11 +1,11 @@
 # Scraper Configuration
 
 # Target URL (Can be overridden by command line args if implemented)
-BASE_URL = "https://medex.com.bd/companies/106/incepta-pharmaceuticals-ltd/brands"
+BASE_URL = "https://medex.com.bd/companies/14/beximco-pharmaceuticals-ltd/brands"
 
 # Range of pages to scrape
 START_PAGE = 1
-END_PAGE = 50
+END_PAGE = 7
 
 # Browser Configuration
 HEADLESS_MODE = False  # Set to True for faster, invisible scraping (Riskier)
@@ -19,6 +19,9 @@ USER_AGENTS = [
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 ]
+
+# Default File Suffix (Used if user presses Enter at prompt)
+DEFAULT_SUFFIX = "Beximco"
 
 # cURL Command to Import (Paste your cURL here to auto-extract headers/cookies)
 # If empty, default headers will be used (which might be blocked)
