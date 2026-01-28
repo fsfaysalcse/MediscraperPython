@@ -1,0 +1,5 @@
+type,category,brand,generic_name,strength,manufacturer,name,primary_unit,secondary_unit,conversion_rate,item_code,medex_url,entry_status,updated_by
+MEDICINE,Capsule,Adora,Cefadroxil Monohydrate,500 mg,Incepta Pharmaceuticals Ltd.,,piece,strip,10,,https://medex.com.bd/brands/6741/adora-500-mg-capsule,AI_L1,
+MEDICINE,Tablet,Alaradate,Methylphenidate Hydrochloride,10 mg,Incepta Pharmaceuticals Ltd.,,piece,strip,10,,https://medex.com.bd/brands/37864/alaradate-10-mg-tablet,AI_L1,
+MEDICINE,Tablet,Actidex,Dexketoprofen,25 mg,Incepta Pharmaceuticals Ltd.,,piece,strip,10,,https://medex.com.bd/brands/31092/actidex-25-mg-tablet,AI_L1,
+MEDICINE,Capsule,Aknill,Isotretinoin,10 mg,Incepta Pharmaceuticals Ltd.,,piece,strip,10,,https://medex.com.bd/brands/35287/aknill-10-mg-capsule,AI_L1,
