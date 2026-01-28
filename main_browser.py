@@ -171,8 +171,65 @@ def find_free_port():
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         return s.getsockname()[1]
 
+def parse_curl_command(curl_command):
+    """
+    Parses a cURL command string to extract headers and cookies.
+    Returns: (cookies_dict, headers_dict)
+    """
+    if not curl_command or "curl" not in curl_command:
+        return None, None
+    
+    cookies = {}
+    headers = {}
+    
+    # Extract Headers (-H "Name: Value")
+    header_matches = re.findall(r"-H\s+['\"]([^'\"]+)['\"]", curl_command)
+    for h in header_matches:
+        if ":" in h:
+            key, val = h.split(":", 1)
+            key = key.strip()
+            val = val.strip()
+            if key.lower() == "cookie":
+                # Parse cookie string manually
+                cookie_parts = val.split(";")
+                for c in cookie_parts:
+                    if "=" in c:
+                        c_key, c_val = c.split("=", 1)
+                        cookies[c_key.strip()] = c_val.strip()
+            else:
+                headers[key] = val
+                
+    # Extract Cookies (--cookie "key=val") which is rare in Copy as cURL but possible
+    # Most browsers put it in -H "Cookie: ..." which is handled above.
+    
+    return cookies, headers
+
 class MedexBrowserScraper:
     def __init__(self):
+        # 1. Try to Attach to Existing Chrome (The "Mind Boggling" Fix)
+        # Check if port 9222 is open
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            result = sock.connect_ex(('127.0.0.1', 9222))
+            sock.close()
+            
+            if result == 0:
+                logger.info(">>> ATTACHING TO EXISTING CHROME INSTANCE (PORT 9222) <<<")
+                logger.info("Using your verified session. Cloudflare should be bypassed.")
+                
+                co = ChromiumOptions()
+                co.set_local_port(9222)
+                self.page = ChromiumPage(co)
+                self.attached_mode = True
+                return
+            else:
+                logger.info("No existing Chrome found on port 9222.")
+        except: pass
+
+        # 2. Fallback: Launch New Browser (Legacy Mode)
+        logger.info(">>> LAUNCHING NEW BROWSER INSTANCE <<<")
+        self.attached_mode = False
+        
         # Create a temporary user data directory
         self.temp_user_data = tempfile.mkdtemp(prefix="medex_scraper_profile_")
         logger.info(f"Created Temp Profile: {self.temp_user_data}")
@@ -181,10 +238,8 @@ class MedexBrowserScraper:
 
         co = ChromiumOptions()
         
-        # User Agent Rotation
-        user_agent = random.choice(config.USER_AGENTS)
-        co.set_user_agent(user_agent)
-        logger.info(f"Using User-Agent: {user_agent}")
+        # REMOVED: User Agent Rotation (Forces mismatch, causing blocks)
+        # co.set_user_agent(user_agent) 
         
         # macOS Path
         chrome_path = get_chrome_path()
@@ -192,14 +247,13 @@ class MedexBrowserScraper:
             logger.info(f"Found Chrome: {chrome_path}")
             co.set_browser_path(chrome_path)
         
-        # Manual Port Selection
+        # Auto-assign free port
         try:
             port = find_free_port()
             logger.info(f"Selected Port: {port}")
             co.set_local_port(port)
         except Exception as e:
-            logger.warning(f"Could not find free port: {e}")
-            co.set_local_port(9222)
+            co.set_local_port(9333) # Fallback
             
         # User Data Dir
         co.set_user_data_path(self.temp_user_data)
@@ -207,22 +261,24 @@ class MedexBrowserScraper:
         # Arguments
         co.set_argument('--no-sandbox')
         co.set_argument('--disable-gpu')
-        co.set_argument('--no-first-run')
-        co.set_argument('--no-default-browser-check')
-        # Stealth: Hide automation features
+        # Stealth Args
         co.set_argument('--disable-blink-features=AutomationControlled')
+        co.set_argument('--disable-infobars')
+        co.set_argument('--excludeSwitches', ['enable-automation'])
+        co.set_argument('--use-mock-keychain')
         
         if config.HEADLESS_MODE:
-            logger.info("Running in Headless Mode")
-            co.set_argument('--headless=new')
+             logger.info("Running in Headless Mode")
+             co.set_argument('--headless=new')
         
         try:
             logger.info("Launching Browser...")
             self.page = ChromiumPage(co)
             logger.info("Browser Launched Successfully")
+            
             try:
                 self.page.set.window.location(0, 0)
-                self.page.set.window.size(1280, 800)
+                self.page.set.window.size(random.randint(1024, 1440), random.randint(768, 900))
             except: pass
 
         except Exception as e:
@@ -233,11 +289,14 @@ class MedexBrowserScraper:
 
     def cleanup(self):
         try:
-            if hasattr(self, 'page') and self.page:
-                self.page.quit()
+            # Only quit if we launched it ourselves
+            if hasattr(self, 'attached_mode') and not self.attached_mode:
+                if hasattr(self, 'page') and self.page:
+                    self.page.quit()
         except: pass
         try:
-            if os.path.exists(self.temp_user_data):
+            # Only cleanup temp dir if we made one
+            if hasattr(self, 'temp_user_data') and os.path.exists(self.temp_user_data):
                 shutil.rmtree(self.temp_user_data, ignore_errors=True)
                 logger.info("Cleaned up temp profile.")
         except: pass
@@ -476,11 +535,18 @@ class MedexBrowserScraper:
                             # logger.info(f"Skipping duplicate URL: {link}")
                             continue
                             
-                        logger.info(f"Visiting: {link}")
-                        details_or_status = self.scrape_details(link)
+                        # Cleanup name for logging
+                        slug = link.split('/')[-1].replace('-', ' ').title()
+                        logger.info(f"Processing: {slug}")
+                        
+                        try:
+                            details_or_status = self.scrape_details(link)
+                        except Exception as e:
+                            logger.error(f"Critical error on item {slug}: {e}")
+                            details_or_status = "ERROR"
                         
                         if details_or_status == "BLOCKED":
-                            logger.warning(f"BLOCKED at Item: {link}")
+                            logger.warning(f"BLOCKED at Item: {slug}")
                             return "BLOCKED", page
                         
                         if isinstance(details_or_status, dict):
@@ -508,47 +574,56 @@ class MedexBrowserScraper:
 
 
 def main_loop():
-    start_page = int(config.START_PAGE)
-    end_page = int(config.END_PAGE)
-    
-    # User Input for Suffix (Ask once)
     try:
-        suffix_input = input(f"What is the file name suffix? (e.g. ACI Limited) [Default: All]: ").strip()
-    except EOFError:
-        suffix_input = ""
+        start_page = int(config.START_PAGE)
+        end_page = int(config.END_PAGE)
         
-    if not suffix_input:
-        suffix = config.DEFAULT_SUFFIX
-        logger.info(f"Using Default Suffix: {suffix}")
-    else:
-        suffix = re.sub(r'[^\w\s-]', '', suffix_input).strip().replace(' ', '_')
-        
-    filename = f"data/medex_mapped_inventory_{suffix}_{start_page}_to_{end_page}.csv"
-    logger.info(f"Output File: {filename}")
-
-    current_page = start_page
-    
-    while current_page <= end_page:
-        logger.info(f"=== Starting Session from Page {current_page} ===")
-        scraper = MedexBrowserScraper()
-        
-        status, stop_page = scraper.run_session(current_page, end_page, filename, suffix)
-        
-        scraper.cleanup()
-        
-        if status == "DONE":
-            logger.info("Scraping Completed Successfully.")
-            break
-        elif status == "BLOCKED":
-            logger.warning(f"Session Blocked at Page {stop_page}. Restarting in 10 seconds...")
-            current_page = stop_page # Resume from the page we got blocked on
-            time.sleep(10)
-        elif status == "ERROR":
-            logger.error(f"Session Error at Page {stop_page}. Stopping.")
-            break
+        # User Input for Suffix (Ask once)
+        try:
+            suffix_input = input(f"What is the file name suffix? (e.g. ACI Limited) [Default: All]: ").strip()
+        except EOFError:
+            suffix_input = ""
+            
+        if not suffix_input:
+            suffix = config.DEFAULT_SUFFIX
+            logger.info(f"Using Default Suffix: {suffix}")
         else:
-            logger.error(f"Unknown status {status}. Stopping.")
-            break
+            suffix = re.sub(r'[^\w\s-]', '', suffix_input).strip().replace(' ', '_')
+            
+        filename = f"data/medex_mapped_inventory_{suffix}_{start_page}_to_{end_page}.csv"
+        logger.info(f"Output File: {filename}")
+
+        current_page = start_page
+        
+        while current_page <= end_page:
+            logger.info(f"=== Starting Session from Page {current_page} ===")
+            scraper = MedexBrowserScraper()
+            
+            try:
+                status, stop_page = scraper.run_session(current_page, end_page, filename, suffix)
+            finally:
+                scraper.cleanup()
+            
+            if status == "DONE":
+                logger.info("Scraping Completed Successfully.")
+                break
+            elif status == "BLOCKED":
+                logger.warning(f"Session Blocked at Page {stop_page}. Restarting in 10 seconds...")
+                current_page = stop_page # Resume from the page we got blocked on
+                time.sleep(10)
+            elif status == "ERROR":
+                logger.error(f"Session Error at Page {stop_page}. Stopping.")
+                break
+            else:
+                logger.error(f"Unknown status {status}. Stopping.")
+                break
+                
+    except KeyboardInterrupt:
+        logger.warning("\nScraper stopped by user (Ctrl+C). Exiting...")
+        sys.exit(0)
+    except Exception as e:
+        logger.critical(f"Unexpected Fatal Error: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main_loop()

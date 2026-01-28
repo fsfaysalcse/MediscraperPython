@@ -1,92 +1,50 @@
-# Medex Python Scraper (Hardened Edition)
+# Medex Python Scraper (Ultimate Bypass Edition)
 
-A robust, "bulletproof" Python scraper designed to scrape inventory data from Medex with advanced anti-blocking features, human simulation, and database-compliant output.
+A robust scraper for Medex with "Attach Mode" to fully bypass Cloudflare protections by using your real browser session.
 
-## Features
-- **Anti-Blocking**: Automatically detects "Security Check" and "Terms of Use" blocks.
-- **Auto-Restart**: If blocked, detects the issue, waits, and restarts the session from the exact page where it left off.
-- **Human Simulation**: Random scrolling, pauses, and mouse movements to mimic real user behavior.
-- **User-Agent Rotation**: Rotates valid User-Agents to avoid fingerprinting.
-- **Database Compliant**: Outputs fully sanitized CSVs compatible with Supabase (strictly quoted, NULL handling).
+## 🚀 The "Attach Mode" (Recommended)
 
-## 🚀 Installation on Windows
+This is the most reliable way to scrape. You open Chrome, verify you're human, and the scraper takes over.
 
-1.  **Install Python**:
-    - Download and install Python (3.10 or later) from [python.org](https://www.python.org/downloads/windows/).
-    - **Important**: Check the box **"Add Python to PATH"** during installation.
+### Step 1: Open Chrome in Debug Mode
+Open your **Terminal** or **PowerShell** and run this command EXACTLY:
 
-2.  **Clone/Download the Repository**:
-    - Download the code folder to your computer and unzip it.
-    - Open the folder in VS Code or File Explorer.
+**Mac (Terminal):**
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir="/tmp/chrome_debug"
+```
 
-3.  **Open Command Prompt (cmd) or PowerShell**:
-    - In the folder address bar, type `cmd` and hit Enter to open a terminal in that folder.
+**Windows (cmd):**
+```cmd
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\chrome_debug"
+```
 
-4.  **Set up Virtual Environment**:
-    ```cmd
-    python -m venv venv
-    ```
+### Step 2: Use the Browser
+1.  A new Chrome window will open.
+2.  Go to **medex.com.bd**.
+3.  Navigate to a brand page.
+4.  **Solve the Captcha** if it appears. Ensure you can browse the site normally.
 
-5.  **Activate Virtual Environment**:
-    - **Command Prompt (cmd)**:
-      ```cmd
-      venv\Scripts\activate
-      ```
-    - **PowerShell**:
-      ```powershell
-      venv\Scripts\Activate.ps1
-      ```
-    *(You should see `(venv)` appear at the start of your command line)*
+### Step 3: Run the Scraper
+In your project folder terminal:
+```bash
+source venv/bin/activate
+python3 main_browser.py
+```
+*The scraper will detect the open Chrome window and start scraping inside it.*
 
-6.  **Install Dependencies**:
-    ```cmd
-    pip install -r requirements.txt
-    ```
+---
 
 ## ⚙️ Configuration (`config.py`)
 
-Edit the `config.py` file to control the scraper behavior.
+- **`DEFAULT_SUFFIX`**: Set your default filename suffix (e.g., "Beximco") here to skip typing it every time.
+- **`START_PAGE` / `END_PAGE`**: Set the page range to scrape.
 
-### Setting the Target URL
-**Crucial**: When copying the URL from the browser, copy **only** up to the `/brands` part. Do **not** include page numbers or other parameters.
-
-*   ✅ **CORRECT**:
-    `https://medex.com.bd/companies/103/ad-din-pharmaceuticals-ltd/brands`
-
-*   ❌ **WRONG**:
-    `https://medex.com.bd/companies/103/ad-din-pharmaceuticals-ltd/brands?page=2`
-
-### Other Settings
-- **`START_PAGE` / `END_PAGE`**: Define the range of pages to scrape (e.g., 1 to 50).
-- **`HEADLESS_MODE`**:
-    - `False` (Default): Opens a visible browser window. Safer, harder to detect.
-    - `True`: Runs in background. Faster but slightly higher risk of detection.
-
-## 🏃 Usage
-
-Run the scraper using the main script. Make sure your virtual environment is activated (`(venv)` is visible).
-
-```cmd
-python main_browser.py
-```
-
-1.  The script will prompt you for a **file suffix**.
-2.  Enter a name (e.g., `Incepta` or `Square`).
-3.  The scraper will run, handling all pages automatically.
-4.  If a block occurs, check the terminal: it will say *"Restarting in 10 seconds..."* and resume automatically.
+## 🏃 Legacy Mode (Fresh Browser)
+If you just run `python3 main_browser.py` *without* opening the debug Chrome first, it will launch a new, fresh browser instance.
+*   **Warning**: This is more likely to be blocked by Cloudflare.
+*   **Stealth**: We have disabled automation flags, but "Attach Mode" is superior.
 
 ## 📂 Data Output
-
-Scraped files are saved in the `data/` directory:
-`data/medex_mapped_inventory_<Suffix>_<Start>_to_<End>.csv`
-
-### 🔒 Security & Data Handling
-> **IMPORTANT SECURITY NOTE**
-> *   **Secure Storage**: Always keep the scraped CSV files in a secure, private folder. Do not expose them publicly.
-> *   **Transfer Protocol**: Once scraping is complete and verified, please securely zip and send the data directly to **Faysal**.
-> *   **Validation**: Before sending, briefly check the CSV to ensure column alignment (headers match values).
-
-## 🛠 Troubleshooting
-
-*   **"Session Blocked"**: The scraper will handle this automatically. If it loops continuously on the same page, try increasing `random` sleep times in `main_browser.py`.
-*   **"Python not found"**: Ensure you installed Python and checked "Add to PATH".
+Files saved in `data/` folder.
+format: `medex_mapped_inventory_<Suffix>_<Start>_to_<End>.csv`
