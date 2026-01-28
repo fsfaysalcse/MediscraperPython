@@ -4,8 +4,8 @@
 BASE_URL = "https://medex.com.bd/companies/14/beximco-pharmaceuticals-ltd/brands"
 
 # Range of pages to scrape
-START_PAGE = 1
-END_PAGE = 7
+START_PAGE = 7
+END_PAGE = 14
 
 # Browser Configuration
 HEADLESS_MODE = False  # Set to True for faster, invisible scraping (Riskier)
@@ -21,7 +21,7 @@ USER_AGENTS = [
 ]
 
 # Default File Suffix (Used if user presses Enter at prompt)
-DEFAULT_SUFFIX = "Beximco"
+DEFAULT_SUFFIX = "Beximco Pharmaceuticals Ltd"
 
 # cURL Command to Import (Paste your cURL here to auto-extract headers/cookies)
 # If empty, default headers will be used (which might be blocked)
