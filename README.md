@@ -9,40 +9,65 @@ A robust, "bulletproof" Python scraper designed to scrape inventory data from Me
 - **User-Agent Rotation**: Rotates valid User-Agents to avoid fingerprinting.
 - **Database Compliant**: Outputs fully sanitized CSVs compatible with Supabase (strictly quoted, NULL handling).
 
-## 🚀 Installation
+## 🚀 Installation on Windows
 
-1.  **Clone the Repository** (if not already done).
+1.  **Install Python**:
+    - Download and install Python (3.10 or later) from [python.org](https://www.python.org/downloads/windows/).
+    - **Important**: Check the box **"Add Python to PATH"** during installation.
 
-2.  **Set up Python Environment**:
-    It is recommended to use a virtual environment.
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
+2.  **Clone/Download the Repository**:
+    - Download the code folder to your computer and unzip it.
+    - Open the folder in VS Code or File Explorer.
+
+3.  **Open Command Prompt (cmd) or PowerShell**:
+    - In the folder address bar, type `cmd` and hit Enter to open a terminal in that folder.
+
+4.  **Set up Virtual Environment**:
+    ```cmd
+    python -m venv venv
     ```
 
-3.  **Install Dependencies**:
-    ```bash
+5.  **Activate Virtual Environment**:
+    - **Command Prompt (cmd)**:
+      ```cmd
+      venv\Scripts\activate
+      ```
+    - **PowerShell**:
+      ```powershell
+      venv\Scripts\Activate.ps1
+      ```
+    *(You should see `(venv)` appear at the start of your command line)*
+
+6.  **Install Dependencies**:
+    ```cmd
     pip install -r requirements.txt
     ```
 
 ## ⚙️ Configuration (`config.py`)
 
-Edit the `config.py` file to control the scraper behavior:
+Edit the `config.py` file to control the scraper behavior.
 
-- **`BASE_URL`**: The target URL list page (e.g., specific manufacturer or brand list).
-- **`START_PAGE` / `END_PAGE`**: Define the range of pages to scrape.
+### Setting the Target URL
+**Crucial**: When copying the URL from the browser, copy **only** up to the `/brands` part. Do **not** include page numbers or other parameters.
+
+*   ✅ **CORRECT**:
+    `https://medex.com.bd/companies/103/ad-din-pharmaceuticals-ltd/brands`
+
+*   ❌ **WRONG**:
+    `https://medex.com.bd/companies/103/ad-din-pharmaceuticals-ltd/brands?page=2`
+
+### Other Settings
+- **`START_PAGE` / `END_PAGE`**: Define the range of pages to scrape (e.g., 1 to 50).
 - **`HEADLESS_MODE`**:
     - `False` (Default): Opens a visible browser window. Safer, harder to detect.
     - `True`: Runs in background. Faster but slightly higher risk of detection.
-- **`USER_AGENTS`**: List of browser fingerprints to rotate through.
 
 ## 🏃 Usage
 
-Run the scraper using the main script:
+Run the scraper using the main script. Make sure your virtual environment is activated (`(venv)` is visible).
 
-```bash
-source venv/bin/activate
-python3 main_browser.py
+```cmd
+python main_browser.py
 ```
 
 1.  The script will prompt you for a **file suffix**.
@@ -64,4 +89,4 @@ Scraped files are saved in the `data/` directory:
 ## 🛠 Troubleshooting
 
 *   **"Session Blocked"**: The scraper will handle this automatically. If it loops continuously on the same page, try increasing `random` sleep times in `main_browser.py`.
-*   **"Chrome not found"**: Ensure Google Chrome is installed in the default location.
+*   **"Python not found"**: Ensure you installed Python and checked "Add to PATH".
