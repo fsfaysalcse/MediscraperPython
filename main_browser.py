@@ -1,5 +1,6 @@
-import time
 import random
+import time
+from alert_manager import AlertManager
 import csv
 import os
 import re
@@ -10,6 +11,13 @@ import socket
 import logging
 import unicodedata
 from datetime import datetime
+from supabase import create_client, ClientOptions
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.prompt import Prompt
+from rich.table import Table
+from rich.text import Text
 
 # DrissionPage
 from DrissionPage import ChromiumPage, ChromiumOptions
@@ -22,11 +30,13 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("scraper.log"),
-        logging.StreamHandler(sys.stdout)
+        logging.FileHandler("scraper.log")
+        # Removed StreamHandler to let rich console handle stdout beautifully
     ]
 )
 logger = logging.getLogger(__name__)
+
+console = Console()
 
 # --- Constants ---
 def clean_text(text):
@@ -71,42 +81,42 @@ def transform_medex_item(scraped_data):
     
     # Default Units
     p_unit = "piece"
-    s_unit = "box"
+    s_unit = None
     conv = 1
     
     # 1. Logic for Tablets/Capsules
     if any(x in dosage for x in ["tablet", "capsule"]):
         p_unit, s_unit, conv = "piece", "strip", 10
         
-    # 2. Logic for Liquids (Syrup, Suspension, Solution, etc)
-    elif any(x in dosage for x in ["syrup", "suspension", "drops", "solution", "mouthwash", "liquid", "elixir"]):
-        p_unit, s_unit, conv = "bottle", "box", 1
+    # 2. Logic for Liquids (Syrup, Suspension, drops, solution, etc)
+    elif any(x in dosage for x in ["syrup", "suspension", "drops", "solution", "mouthwash", "liquid", "elixir", "pediatric"]):
+        p_unit, s_unit, conv = "bottle", None, 1
         
     # 3. Logic for Injections
-    elif "injection" in dosage:
+    elif "injection" in dosage or "iv infusion" in dosage.lower():
         if "vial" in dosage:
             p_unit = "vial"
         elif "ampoule" in dosage:
             p_unit = "ampoule"
         else:
-            p_unit = "ampoule" 
-        s_unit, conv = "box", 1
+            p_unit = "piece" 
+        s_unit, conv = None, 1
         
     # 4. Logic for Topicals
-    elif any(x in dosage for x in ["cream", "ointment", "gel", "lotion"]):
-        p_unit, s_unit, conv = "tube", "box", 1
+    elif any(x in dosage for x in ["cream", "ointment", "gel", "lotion", "paste"]):
+        p_unit, s_unit, conv = "tube", None, 1
         
-    # 5. Logic for Inhalers
-    elif "inhaler" in dosage or "spray" in dosage or "puff" in dosage:
-        p_unit, s_unit, conv = "puff", "box", 200
+    # 5. Logic for Inhalers / Sprays
+    elif any(x in dosage for x in ["inhaler", "spray", "puff"]):
+        p_unit, s_unit, conv = "piece", None, 1
 
     # 6. Logic for Sachets/Powders
     elif any(x in dosage for x in ["sachet", "powder", "granules"]):
-        p_unit, s_unit, conv = "sachet", "box", 1
+        p_unit, s_unit, conv = "sachet", None, 1
 
     # 7. Logic for Suppositories
     elif "suppository" in dosage:
-        p_unit, s_unit, conv = "piece", "box", 1
+        p_unit, s_unit, conv = "piece", None, 1
 
     # Determine Type (Medicine vs Other)
     # User Request: Field 'type': Always 'MEDICINE'
@@ -133,7 +143,10 @@ def transform_medex_item(scraped_data):
     if not strength_val: strength_val = "N/A"
 
     generic_val = scraped_data.get('generic_name', '').strip()
-    if not generic_val: generic_val = "Unknown"
+    if not generic_val: generic_val = None
+
+    manufacturer_val = scraped_data.get('manufacturer', '').strip()
+    if not manufacturer_val: manufacturer_val = None
 
     return {
         "type": "MEDICINE",
@@ -141,7 +154,7 @@ def transform_medex_item(scraped_data):
         "brand": brand_val,
         "generic_name": generic_val,
         "strength": strength_val,
-        "manufacturer": scraped_data.get('manufacturer', '').strip(),
+        "manufacturer": manufacturer_val,
         "name": None, # Requested field, must be NULL for MEDICINE
         "primary_unit": p_unit,
         "secondary_unit": s_unit,
@@ -337,50 +350,42 @@ class MedexBrowserScraper:
 
     def handle_security_check(self):
         """
-        Checks for 'Security Check' page. 
-        If detected, PAUSES and waits for MANUAL user intervention.
+        Detects Cloudflare/Security checks.
+        If found, PAUSES and waits for MANUAL user intervention.
         Returns True if check passed (eventually), False if skipped/failed.
         """
         try:
             if not self.page: return False
-            
-            # Check if we are on a security page
-            title = self.page.title.lower()
-            text = self.page.html.lower()
-            is_captcha = "security check" in title or "captcha-button" in text
-            
-            if not is_captcha:
-                return True # All good
-            
-            # --- MANUAL INTERVENTION MODE ---
-            logger.warning("!!! SECURITY CHECK DETECTED !!!")
-            logger.warning(">>> PLEASE SOLVE THE CAPTCHA MANUALLY IN THE BROWSER <<<")
-            logger.warning("The script is PAUSED and waiting for you...")
-            
-            # Play a beep/sound if possible (terminal bell)
-            print('\a') 
-            
-            # Wait loop
-            while True:
-                time.sleep(2)
+
+            if self.check_for_block():
+                logger.warning("!!! SECURITY CHECK DETECTED !!!")
+                logger.warning(">>> PLEASE SOLVE THE CAPTCHA MANUALLY IN THE BROWSER <<<")
+                logger.warning("The script is PAUSED and waiting for you...")
+
+                # Start Audio Alert
+                alerter = AlertManager("beep.mp3")
+                alerter.start()
+
                 try:
-                    curr_title = self.page.title.lower()
-                    if "security check" not in curr_title and "just a moment" not in curr_title:
-                        logger.info("Security Check passed! Resuming...")
-                        time.sleep(2) # Give it a sec to settle
-                        return True
-                    else:
-                        # Still stuck
-                        pass
-                except:
-                    # Page might be navigating
-                    pass
-                    
+                    # Wait until title changes or user solves it
+                    while self.check_for_block():
+                        time.sleep(2)
+                        # Optional: Check if we lost connection or browser closed
+                        if not self.page.ele('tag:body'):
+                            break
+                finally:
+                    # Stop Audio Alert immediately after loop breaks (solved or error)
+                    alerter.stop()
+
+                logger.info("Security Check passed! Resuming...")
+                time.sleep(2) # Extra buffer
+                return True
+            
+            return True
+
         except Exception as e:
             logger.error(f"Error in security check handler: {e}")
             return False
-            
-        return True
 
     def scrape_details(self, url):
         self.page.get(url)
@@ -438,53 +443,27 @@ class MedexBrowserScraper:
             logger.error(f"Extraction Error for {url}: {e}")
             return None
 
-    def validate_csv(self, filename):
-        """Validates the CSV file integrity."""
-        # logger.info(f"Validating {filename}...")
-        try:
-            with open(filename, 'r', encoding='utf-8') as f:
-                reader = csv.reader(f)
-                header = next(reader, None)
-                if not header:
-                    return False
-                
-                required_cols = ["type", "category", "brand", "generic_name", "strength", 
-                                "manufacturer", "name", "primary_unit", "secondary_unit", 
-                                "conversion_rate", "item_code", "medex_url", "entry_status", 
-                                "updated_by"]
-                
-                # Check header length equal
-                if len(header) != len(required_cols):
-                    return False # Strict header check
-                
-                row_count = 0
-                for row in reader:
-                    row_count += 1
-                    if len(row) != len(required_cols):
-                         logger.error(f"Row {row_count + 1} validation failed: Expected {len(required_cols)} cols, got {len(row)}")
-                         return False
-                
-                return True
-        except Exception as e:
-            logger.error(f"CSV Validation Exception: {e}")
-            return False
-
     def load_processed_urls(self, filename):
         if os.path.exists(filename):
             logger.info(f"Loading processed URLs from {filename}...")
             try:
                 with open(filename, 'r', encoding='utf-8') as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        url = row.get("medex_url")
+                    for line in f:
+                        url = line.strip()
                         if url: self.seen_urls.add(url)
                 logger.info(f"Loaded {len(self.seen_urls)} processed URLs.")
             except Exception as e:
                 logger.error(f"Error loading processed URLs: {e}")
 
+    def append_processed_url(self, url, filename):
+        try:
+            with open(filename, 'a', encoding='utf-8') as f:
+                f.write(f"{url}\n")
+        except: pass
+
     def run_session(self, start_page, end_page, filename, suffix=""):
         """
-        Runs the scraper for the given range.
+        Runs the scraper for the given range and uploads dynamically to Supabase.
         Returns:
             (status_code, last_processed_page)
             status_code: 'DONE', 'BLOCKED', 'ERROR'
@@ -496,141 +475,194 @@ class MedexBrowserScraper:
         # Load processed URLs to avoid duplicates
         self.load_processed_urls(filename)
 
-        # Columns
-        fieldnames = ["type", "category", "brand", "generic_name", "strength", 
-                      "manufacturer", "name", "primary_unit", "secondary_unit", 
-                      "conversion_rate", "item_code", "medex_url", "entry_status", 
-                      "updated_by"]
+        # Initialize Supabase Sync Client
+        url = config.SUPABASE_URL
+        key = config.SUPABASE_KEY
+        options = ClientOptions(postgrest_client_timeout=15)
+        try:
+            supabase = create_client(url, key, options=options)
+        except Exception as e:
+            logger.critical(f"Supabase init error: {e}")
+            return "ERROR", start_page, {}
+            
+        stats = {'inserted': 0, 'skipped': 0, 'errors': 0, 'total': 0}
         
         try:
-            # Check if file exists to decide mode
-            mode = 'a' if os.path.exists(filename) else 'w'
-            
-            with open(filename, mode, newline='', encoding='utf-8') as csvfile:
-                # Use QUOTE_ALL as requested by user to safe-guard row integrity
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction='ignore', quoting=csv.QUOTE_ALL)
+            for page in range(start_page, end_page + 1):
+                console.print(f"[bold blue]--- Processing Page {page} ---[/]")
+                logger.info(f"--- Processing Page {page} ---")
+                list_url = f"{base}{'&' if '?' in base else '?'}page={page}" if page > 1 else base
                 
-                if mode == 'w':
-                    writer.writeheader()
+                self.page.get(list_url)
                 
-                for page in range(start_page, end_page + 1):
-                    logger.info(f"--- Processing Page {page} ---")
-                    list_url = f"{base}{'&' if '?' in base else '?'}page={page}" if page > 1 else base
-                    
-                    self.page.get(list_url)
-                    
-                    if self.check_for_block():
-                        logger.warning(f"BLOCKED at Page {page} List View.")
-                        return "BLOCKED", page
-                    
-                    if not self.handle_security_check():
-                         logger.error(f"Failed captcha on list page {page}. Skipping page or Blocked?")
-                         # If we fail captcha here, likely blocked.
-                         return "BLOCKED", page
-                    
-                    # Human behavior on list page
-                    self.simulate_human_behavior()
+                if self.check_for_block():
+                    logger.warning(f"BLOCKED at Page {page} List View.")
+                    return "BLOCKED", page
+                
+                if not self.handle_security_check():
+                     logger.error(f"Failed captcha on list page {page}. Skipping page or Blocked?")
+                     return "BLOCKED", page
+                
+                # Human behavior on list page
+                self.simulate_human_behavior()
+                
+                try:
+                    links = [el.attr('href') for el in self.page.eles('css:a.hoverable-block')]
+                except: links = []
+                
+                # Dedup links on the page itself
+                unique_links = list(set(links))
+                console.print(f"[cyan]Found {len(unique_links)} items on Page {page}[/]")
+                logger.info(f"Found {len(unique_links)} items on Page {page}")
+                
+                for link in unique_links:
+                    if link in self.seen_urls:
+                        continue
+                        
+                    stats['total'] += 1
+                        
+                    # Cleanup name for logging
+                    slug = link.split('/')[-1].replace('-', ' ').title()
+                    logger.info(f"Processing: {slug}")
                     
                     try:
-                        links = [el.attr('href') for el in self.page.eles('css:a.hoverable-block')]
-                    except: links = []
+                        details_or_status = self.scrape_details(link)
+                    except Exception as e:
+                        logger.error(f"Critical error on item {slug}: {e}")
+                        details_or_status = "ERROR"
                     
-                    # Dedup links on the page itself
-                    unique_links = list(set(links))
-                    logger.info(f"Found {len(unique_links)} items on Page {page}")
+                    if details_or_status == "BLOCKED":
+                        logger.warning(f"BLOCKED at Item: {slug}")
+                        return "BLOCKED", page
                     
-                    for link in unique_links:
-                        if link in self.seen_urls:
-                            # logger.info(f"Skipping duplicate URL: {link}")
-                            continue
-                            
-                        # Cleanup name for logging
-                        slug = link.split('/')[-1].replace('-', ' ').title()
-                        logger.info(f"Processing: {slug}")
+                    if isinstance(details_or_status, dict):
+                        data = details_or_status
+                        is_medicine = data['type'] == 'MEDICINE'
+                        
+                        def none_if_empty(val, default_val=None):
+                            if val is None: return default_val
+                            if isinstance(val, str) and str(val).strip() == '': return default_val
+                            return val
+                        
+                        # Prepare dynamic RPC Request Mapping Matching Bulk Uploader
+                        rpc_payload = {
+                            "p_type": data['type'],
+                            "p_category": none_if_empty(data.get('category'), 'Miscellaneous'), 
+                            "p_brand": none_if_empty(data.get('brand')) if is_medicine else None,
+                            "p_generic_name": none_if_empty(data.get('generic_name')) if is_medicine else None, 
+                            "p_strength": none_if_empty(data.get('strength'), 'N/A') if is_medicine else None,
+                            "p_manufacturer_name": none_if_empty(data.get('manufacturer')), 
+                            "p_name": None if is_medicine else none_if_empty(data.get('name')),
+                            "p_primary_unit": none_if_empty(data.get('primary_unit', 'piece')),
+                            "p_secondary_unit": none_if_empty(data.get('secondary_unit')),
+                            "p_conversion_rate": data.get('conversion_rate', 1),
+                            "p_item_code": none_if_empty(data.get('item_code'), ''),
+                            "p_medex_url": none_if_empty(data.get('medex_url'))
+                        }
                         
                         try:
-                            details_or_status = self.scrape_details(link)
-                        except Exception as e:
-                            logger.error(f"Critical error on item {slug}: {e}")
-                            details_or_status = "ERROR"
-                        
-                        if details_or_status == "BLOCKED":
-                            logger.warning(f"BLOCKED at Item: {slug}")
-                            return "BLOCKED", page
-                        
-                        if isinstance(details_or_status, dict):
-                            writer.writerow(details_or_status)
-                            csvfile.flush() 
-                            self.seen_urls.add(link)
-                            logger.info(f"    -> Scraped: {details_or_status['brand']}")
-                            time.sleep(random.uniform(0.5, 1.5))
-                    
-                    logger.info(f"Page {page} done. Validating CSV...")
-                    if not self.validate_csv(filename):
-                        logger.critical("CSV Validation Failed! Stopping.")
-                        return "ERROR", page
+                            res = supabase.rpc('global_inventory_add_data_from_python', rpc_payload).execute()
+                            console.print(f"    [bold green]✓ Scraped & Uploaded:[/bold green] {data['brand']}")
+                            logger.info(f"    -> Scraped & Uploaded to Supabase: {data['brand']}")
+                            stats['inserted'] += 1
+                        except Exception as db_err:
+                            err_str = str(db_err).lower()
+                            if "inventory_global_medex_url_key" in err_str or "duplicate key" in err_str or "inventory_global_brand_id_key" in err_str:
+                                console.print(f"    [bold yellow]⚠ Skipped (Duplicate):[/bold yellow] {data['brand']}")
+                                logger.info(f"    -> Skipped (Duplicate already in Database): {data['brand']}")
+                                stats['skipped'] += 1
+                            else:
+                                console.print(f"    [bold red]✖ DB Upload failed for {data.get('brand')}:[/bold red] {db_err}")
+                                logger.error(f"    -> DB Upload failed for {data.get('brand')}: {db_err}")
+                                stats['errors'] += 1
 
-                    # Random delay between pages
-                    time.sleep(random.uniform(2, 4))
-            
-            return "DONE", end_page
+                        # Append successful execution to text log so we skip next load
+                        self.append_processed_url(link, filename)
+                        self.seen_urls.add(link)
+                        time.sleep(random.uniform(0.5, 1.5))
+                
+                # Random delay between pages
+                time.sleep(random.uniform(2, 4))
+        
+            return "DONE", end_page, stats
             
         except Exception as e:
             logger.error(f"Session Error: {e}")
             import traceback
             traceback.print_exc()
-            return "ERROR", start_page
+            return "ERROR", start_page, stats
 
 
 def main_loop():
     try:
+        console.print(Panel(Text("Medidesh Live Browser Scraper & Uploader", justify="center", style="bold cyan"), expand=False))
+        
         start_page = int(config.START_PAGE)
         end_page = int(config.END_PAGE)
         
         # User Input for Suffix (Ask once)
-        try:
-            suffix_input = input(f"What is the file name suffix? (e.g. ACI Limited) [Default: All]: ").strip()
-        except EOFError:
-            suffix_input = ""
+        suffix_input = Prompt.ask("What is the [cyan]list suffix[/]? (e.g. ACI Limited) [dim][Default: All][/dim]", default="").strip()
             
         if not suffix_input:
             suffix = config.DEFAULT_SUFFIX
-            logger.info(f"Using Default Suffix: {suffix}")
+            console.print(f"[italic]Using Default Suffix:[/] [cyan]{suffix}[/]")
         else:
             suffix = re.sub(r'[^\w\s-]', '', suffix_input).strip().replace(' ', '_')
             
-        filename = f"data/medex_mapped_inventory_{suffix}_{start_page}_to_{end_page}.csv"
-        logger.info(f"Output File: {filename}")
+        # Write to txt file now instead of CSV
+        filename = f"data/scraped_urls_{suffix}_{start_page}_to_{end_page}.txt"
+        console.print(f"[dim]Deduplication File: {filename}[/dim]\n")
+        logger.info(f"Deduplication File: {filename}")
 
         current_page = start_page
+        all_stats = {'inserted': 0, 'skipped': 0, 'errors': 0, 'total': 0}
         
         while current_page <= end_page:
-            logger.info(f"=== Starting Session from Page {current_page} ===")
+            console.print(f"\n[bold magenta]=== Starting Session from Page {current_page} ===[/]")
             scraper = MedexBrowserScraper()
             
             try:
-                status, stop_page = scraper.run_session(current_page, end_page, filename, suffix)
+                status, stop_page, session_stats = scraper.run_session(current_page, end_page, filename, suffix)
+                if session_stats:
+                    all_stats['inserted'] += session_stats.get('inserted', 0)
+                    all_stats['skipped'] += session_stats.get('skipped', 0)
+                    all_stats['errors'] += session_stats.get('errors', 0)
+                    all_stats['total'] += session_stats.get('total', 0)
             finally:
                 scraper.cleanup()
             
             if status == "DONE":
-                logger.info("Scraping Completed Successfully.")
+                console.print("\n[bold green]✨ Scraping Completed Successfully![/]")
                 break
             elif status == "BLOCKED":
-                logger.warning(f"Session Blocked at Page {stop_page}. Restarting in 10 seconds...")
+                console.print(f"[bold yellow]⚠ Session Blocked at Page {stop_page}. Restarting in 10 seconds...[/]")
                 current_page = stop_page # Resume from the page we got blocked on
                 time.sleep(10)
             elif status == "ERROR":
-                logger.error(f"Session Error at Page {stop_page}. Stopping.")
+                console.print(f"[bold red]✖ Session Error at Page {stop_page}. Stopping.[/]")
                 break
             else:
-                logger.error(f"Unknown status {status}. Stopping.")
+                console.print(f"[bold red]Unknown status {status}. Stopping.[/]")
                 break
                 
+        # Print Final Summary Table
+        console.print("\n")
+        table = Table(title="Live Extraction Summary", title_style="bold cyan")
+        table.add_column("Metric", style="bold")
+        table.add_column("Value", justify="right", style="cyan")
+
+        table.add_row("Total Items Sourced", str(all_stats['total']))
+        table.add_row("Successfully Uploaded", f"[green]{all_stats['inserted']}[/]")
+        table.add_row("Duplicates Skipped", f"[yellow]{all_stats['skipped']}[/]")
+        table.add_row("Failed Rows", f"[red]{all_stats['errors']}[/]")
+
+        console.print(table)
+                
     except KeyboardInterrupt:
-        logger.warning("\nScraper stopped by user (Ctrl+C). Exiting...")
+        console.print("\n[bold yellow]⚠ Scraper stopped by user (Ctrl+C). Exiting...[/]")
         sys.exit(0)
     except Exception as e:
+        console.print(f"[bold red]✖ Unexpected Fatal Error: {e}[/]")
         logger.critical(f"Unexpected Fatal Error: {e}")
         sys.exit(1)
 

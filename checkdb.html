@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Analytics Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Bricolage Grotesque', sans-serif;
+            background: #0a2e2e;
+            position: relative;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(circle at 20% 50%, rgba(32, 178, 170, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(46, 139, 87, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 40% 20%, rgba(0, 139, 139, 0.1) 0%, transparent 40%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 1.5rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 2rem;
+            animation: fadeInDown 0.6s ease-out;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header h1 {
+            font-size: 2.8rem;
+            font-weight: 800;
+            margin-bottom: 0.3rem;
+            background: linear-gradient(135deg, #20b2aa 0%, #3dd9cf 50%, #2e8b57 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -1.5px;
+        }
+
+        .header p {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 500;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .btn {
+            padding: 0.75rem 2rem;
+            background: linear-gradient(135deg, #20b2aa 0%, #008b8b 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-family: 'Bricolage Grotesque', sans-serif;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 0.95rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 15px rgba(32, 178, 170, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(32, 178, 170, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 1.5rem;
+            animation: slideUp 0.6s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(40px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(32, 178, 170, 0.2);
+            border-radius: 16px;
+            padding: 1.5rem;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, #20b2aa 0%, #3dd9cf 100%);
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .stat-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(32, 178, 170, 0.4);
+            box-shadow: 0 10px 40px rgba(32, 178, 170, 0.2);
+        }
+
+        .stat-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            opacity: 0.8;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #20b2aa 0%, #3dd9cf 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1;
+        }
+
+        .detail-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 1.5rem;
+            animation: slideUp 0.8s ease-out 0.2s both;
+        }
+
+        .detail-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(32, 178, 170, 0.2);
+            border-radius: 16px;
+            padding: 1.75rem;
+            transition: all 0.3s ease;
+            max-height: 600px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .detail-card:hover {
+            border-color: rgba(32, 178, 170, 0.4);
+            box-shadow: 0 8px 30px rgba(32, 178, 170, 0.15);
+        }
+
+        .detail-card h2 {
+            font-size: 1.3rem;
+            margin-bottom: 1.25rem;
+            color: #20b2aa;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .item-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+            flex: 1;
+        }
+
+        .item-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .item-list::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+
+        .item-list::-webkit-scrollbar-thumb {
+            background: rgba(32, 178, 170, 0.3);
+            border-radius: 10px;
+        }
+
+        .item-list::-webkit-scrollbar-thumb:hover {
+            background: rgba(32, 178, 170, 0.5);
+        }
+
+        .item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.9rem 1.1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border-left: 3px solid transparent;
+        }
+
+        .item:hover {
+            background: rgba(32, 178, 170, 0.1);
+            border-left-color: #20b2aa;
+            transform: translateX(5px);
+        }
+
+        .item-name {
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.95rem;
+        }
+
+        .item-count {
+            font-weight: 800;
+            color: #20b2aa;
+            font-size: 1.1rem;
+            background: rgba(32, 178, 170, 0.15);
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            min-width: 50px;
+            text-align: center;
+        }
+
+        .loading {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1.1rem;
+            padding: 2rem;
+            font-weight: 600;
+        }
+
+        .spinner {
+            border: 3px solid rgba(32, 178, 170, 0.2);
+            border-top: 3px solid #20b2aa;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error {
+            background: rgba(255, 82, 82, 0.1);
+            border: 1px solid rgba(255, 82, 82, 0.3);
+            color: #ff9999;
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid #ff5252;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+        }
+
+        .empty-state {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
+            padding: 3rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        @media (max-width: 1024px) {
+            .detail-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stat-value {
+                font-size: 2rem;
+            }
+
+            .detail-cards {
+                grid-template-columns: 1fr;
+            }
+
+            .detail-card {
+                min-width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📦 Inventory Analytics</h1>
+            <p>Real-time insights into your inventory management</p>
+        </div>
+
+        <div class="controls">
+            <button class="btn" id="loadBtn" onclick="loadData()">
+                <span style="position: relative; z-index: 1;">🔄 Refresh Data</span>
+            </button>
+        </div>
+
+        <div id="error"></div>
+        <div id="loading" style="display: none;">
+            <div class="loading">
+                <div class="spinner"></div>
+                Loading inventory data...
+            </div>
+        </div>
+        <div id="content"></div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://dypnzxugrkbmlvljuknz.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5cG56eHVncmtibWx2bGp1a256Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzOTI5NDMsImV4cCI6MjA2OTk2ODk0M30.eM1vl7UFsWH_EqOeqGgQHB2a9SZ599ocDFeb2KlMLZQ';
+
+        let inventoryData = null;
+        let isLoading = false;
+
+        async function loadData() {
+            if (isLoading) return;
+
+            const loadBtn = document.getElementById('loadBtn');
+            const loading = document.getElementById('loading');
+            const content = document.getElementById('content');
+            const errorDiv = document.getElementById('error');
+
+            isLoading = true;
+            errorDiv.innerHTML = '';
+            loading.style.display = 'block';
+            content.style.opacity = '0.5';
+            loadBtn.disabled = true;
+
+            try {
+                // 1. Fetch Total Count
+                const countUrl = `${SUPABASE_URL}/rest/v1/inventory_global?select=*&head=true`;
+                const countRes = await fetch(countUrl, {
+                    method: 'GET',
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+                // Content-Range: 0-0/1234
+                const totalCount = countRes.headers.get('content-range') ? parseInt(countRes.headers.get('content-range').split('/')[1]) : 0;
+
+                // 2. Fetch Sample Items for aggregation (limit 1000 for better stats)
+                const dataUrl = `${SUPABASE_URL}/rest/v1/inventory_global?select=category,manufacturer,type&limit=1000`;
+                const dataRes = await fetch(dataUrl, {
+                    method: 'GET',
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+
+                if (!dataRes.ok) throw new Error("Failed to fetch data");
+
+                const items = await dataRes.json();
+
+                // Aggregate Data Locally
+                const stats = {
+                    total_inventory: totalCount || items.length,
+                    type_count: { medicine: 0, other: 0 },
+                    category_counts: {},
+                    manufacturer_count: {}
+                };
+
+                items.forEach(item => {
+                    // Type
+                    // Assuming type is a column, otherwise infer
+                    if (item.type === 'MEDICINE' || !item.type) stats.type_count.medicine++;
+                    else stats.type_count.other++;
+
+                    // Category
+                    const cat = item.category || 'Uncategorized';
+                    stats.category_counts[cat] = (stats.category_counts[cat] || 0) + 1;
+
+                    // Manufacturer
+                    const mfg = item.manufacturer || 'Unknown';
+                    stats.manufacturer_count[mfg] = (stats.manufacturer_count[mfg] || 0) + 1;
+                });
+
+                renderDashboard(stats);
+                content.style.opacity = '1';
+            } catch (err) {
+                showError(`Failed to load inventory data: ${err.message}`);
+                content.style.opacity = '1';
+            } finally {
+                loading.style.display = 'none';
+                loadBtn.disabled = false;
+                isLoading = false;
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.innerHTML = `<div class="error">⚠️ ${message}</div>`;
+        }
+
+        function renderDashboard(data) {
+            const content = document.getElementById('content');
+
+            if (!data) {
+                content.innerHTML = '<div class="empty-state">No inventory data available</div>';
+                return;
+            }
+
+            const statsHtml = `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">📊</div>
+                        <div class="stat-label">Total Items</div>
+                        <div class="stat-value">${(data.total_inventory || 0).toLocaleString()}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">💊</div>
+                        <div class="stat-label">Medicines</div>
+                        <div class="stat-value">${(data.type_count?.medicine || 0).toLocaleString()}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📦</div>
+                        <div class="stat-label">Other Items</div>
+                        <div class="stat-value">${(data.type_count?.other || 0).toLocaleString()}</div>
+                    </div>
+                </div>
+            `;
+
+            const categoryHtml = data.category_counts ? `
+                <div class="detail-card">
+                    <h2>📋 Top Categories</h2>
+                    <div class="item-list">
+                        ${Object.entries(data.category_counts)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10) // Top 10
+                    .map(([name, count]) => `
+                                <div class="item">
+                                    <span class="item-name">${name}</span>
+                                    <span class="item-count">${count.toLocaleString()}</span>
+                                </div>
+                            `).join('')}
+                    </div>
+                </div>
+            ` : '';
+
+            const manufacturerHtml = data.manufacturer_count ? `
+                <div class="detail-card">
+                    <h2>🏭 Top Manufacturers</h2>
+                    <div class="item-list">
+                        ${Object.entries(data.manufacturer_count)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10) // Top 10
+                    .map(([name, count]) => `
+                                <div class="item">
+                                    <span class="item-name">${name}</span>
+                                    <span class="item-count">${count.toLocaleString()}</span>
+                                </div>
+                            `).join('')}
+                    </div>
+                </div>
+            ` : '';
+
+            content.innerHTML = `
+                ${statsHtml}
+                <div class="detail-cards">
+                    ${categoryHtml}
+                    ${manufacturerHtml}
+                </div>
+            `;
+        }
+
+        // Load data once when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+        });
+    </script>
+</body>
+
+</html>

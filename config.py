@@ -1,11 +1,21 @@
-# Scraper Configuration
+# Supabase Configuration
+SUPABASE_URL = "https://dypnzxugrkbmlvljuknz.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5cG56eHVncmtibWx2bGp1a256Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzOTI5NDMsImV4cCI6MjA2OTk2ODk0M30.eM1vl7UFsWH_EqOeqGgQHB2a9SZ599ocDFeb2KlMLZQ"  # Prefer SERVICE_ROLE key for bulk operations, or ANON key if RLS allows
+SUPABASE_TABLE = "inventory_global"
+
+# Flask Admin Configuration
+ADMIN_TOKEN = "super_secret_admin_token_2026"  # Change this to a secure random string in production
+
 
 # Target URL (Can be overridden by command line args if implemented)
-BASE_URL = "https://medex.com.bd/companies/14/beximco-pharmaceuticals-ltd/brands"
+BASE_URL = "https://medex.com.bd/companies/48/nipro-jmi-pharma-ltd/brands"
 
 # Range of pages to scrape
-START_PAGE = 7
-END_PAGE = 14
+START_PAGE = 1
+END_PAGE = 2
+
+# Default File Suffix (Used if user presses Enter at prompt)
+DEFAULT_SUFFIX = "Nipro JMI Pharma Ltd"
 
 # Browser Configuration
 HEADLESS_MODE = False  # Set to True for faster, invisible scraping (Riskier)
@@ -20,8 +30,6 @@ USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 ]
 
-# Default File Suffix (Used if user presses Enter at prompt)
-DEFAULT_SUFFIX = "Beximco Pharmaceuticals Ltd"
 
 # cURL Command to Import (Paste your cURL here to auto-extract headers/cookies)
 # If empty, default headers will be used (which might be blocked)
